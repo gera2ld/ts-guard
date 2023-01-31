@@ -256,5 +256,5 @@ function calcTypeFlag(
   type: DataType,
   optional?: boolean,
 ) {
-  return (+!!optional << 1) + type;
+  return (+!!optional << 2) + type;
 }
