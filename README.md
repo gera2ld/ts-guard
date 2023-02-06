@@ -81,7 +81,7 @@ By wrapping it with `tsGuard(...)` and compiling with `ts-guard`, the output of
 the script above will be `{ strings: [], obj: {} }` instead of an empty object
 `{}`.
 
-So we can call array functions on `data.strings` or read `obj.tada` without
+So we can call array functions on `data.strings` or read `data.obj.tada` without
 checking the existence of `data.strings` and `data.obj`.
 
 Free your mind and enjoy promised TypeScript.

@@ -94,7 +94,10 @@ function guardType(type: Type<ts.Type>) {
   return { value, text };
 }
 
-function tsGuard(project: Project, node: CallExpression<ts.CallExpression>) {
+function getGuardInfo(
+  project: Project,
+  node: CallExpression<ts.CallExpression>,
+) {
   const propArg = node.getArguments()[1];
   const prop = propArg?.getType().getLiteralValueOrThrow() as string;
   const typeChecker = project.getTypeChecker();
@@ -119,7 +122,7 @@ function scanFiles(project: Project) {
       const identifierName = identifier?.getText();
       let guard: IGuardInfo | undefined;
       if (identifierName === "tsGuard") {
-        guard = tsGuard(project, node);
+        guard = getGuardInfo(project, node);
       }
       if (guard) guards.push(guard);
     });
