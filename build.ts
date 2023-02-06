@@ -12,7 +12,7 @@ await build({
     deno: true,
   },
   package: {
-    name: "ts-guard",
+    name: "@gera2ld/ts-guard",
     version: Deno.env.get("VERSION") || "0.0.0",
     description: "Guard your object with TypeScript declarations",
     license: "MIT",
@@ -24,6 +24,10 @@ await build({
       url: "https://github.com/gera2ld/ts-guard/issues",
     },
     bin: "./ts-guard.js",
+    "publishConfig": {
+      "access": "public",
+      "registry": "https://registry.npmjs.org/",
+    },
   },
   mappings: {
     "./util.ts": "./util.node.ts",
