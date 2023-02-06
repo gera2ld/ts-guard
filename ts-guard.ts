@@ -4,7 +4,7 @@ import {
   ProjectOptions,
   ts,
   Type,
-} from "https://deno.land/x/ts_morph/mod.ts";
+} from "https://deno.land/x/ts_morph@17.0.1/mod.ts";
 import { readTemplate } from "./util.ts";
 
 enum DataType {
