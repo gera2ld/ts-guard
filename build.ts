@@ -1,4 +1,4 @@
-import { build, emptyDir } from "https://deno.land/x/dnt/mod.ts";
+import { build, emptyDir } from "https://deno.land/x/dnt@0.33.1/mod.ts";
 
 await emptyDir("./npm");
 
@@ -24,4 +24,5 @@ await build({
   mappings: {
     "./util.ts": "./util.node.ts",
   },
+  test: false,
 });
