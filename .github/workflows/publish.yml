@@ -1,0 +1,42 @@
+name: Publish to npmjs
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+  push:
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          registry-url: 'https://registry.npmjs.org'
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - name: build and publish
+        run: |
+          VERSION=$INPUT_VERSION
+          if [ -z "$VERSION" ]; then
+            VERSION=${PUSH_REF#refs/tags/v}
+          fi
+          if [ -z "$VERSION" ]; then
+            echo version is required
+            exit 1
+          fi
+          echo version=$VERSION
+          VERSION=$VERSION deno run -A ./build.ts
+          cd npm
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PUSH_REF: ${{ github.event.ref }}
