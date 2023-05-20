@@ -67,9 +67,6 @@ const typeMap: ITypeMap = new Map();
 export async function compile(options?: ProjectOptions) {
   const project = new Project({
     tsConfigFilePath: "tsconfig.json",
-    compilerOptions: {
-      outDir: "dist",
-    },
     ...options,
   });
   await updateGuards(project, scanFiles(project));

@@ -1,3 +1,5 @@
+#!/usr/bin/env -S deno run -A
+
 import { assert } from "https://deno.land/std@0.188.0/testing/asserts.ts";
 import { build, emptyDir } from "https://deno.land/x/dnt@0.35.0/mod.ts";
 
@@ -9,9 +11,9 @@ await emptyDir("./npm");
 
 await build({
   entryPoints: ["src/ts-guard.ts", {
-    kind: 'bin',
-    name: 'ts-guard',
-    path: 'src/main.ts',
+    kind: "bin",
+    name: "ts-guard",
+    path: "src/main.ts",
   }],
   outDir: "./npm",
   shims: {
@@ -40,9 +42,9 @@ await build({
       name: "ts-morph",
       version: "^18.0.0",
     },
-    'https://esm.sh/cac': {
-      name: 'cac',
-      version: '^6.7.14'
+    "https://esm.sh/cac": {
+      name: "cac",
+      version: "^6.7.14",
     },
   },
   test: false,
