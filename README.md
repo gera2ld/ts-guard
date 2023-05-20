@@ -29,7 +29,41 @@ $ deno run -A https://github.com/gera2ld/ts-guard/raw/main/src/main.ts
 
 ### Use with Node
 
-Coming soon.
+Install the package locally:
+
+```bash
+$ pnpm i @gera2ld/ts-guard
+```
+
+Add shim to `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "shim": ["./node_modules/@gera2ld/ts-guard/shim.d.ts"]
+    }
+  }
+}
+```
+
+Wrap your data with `tsGuard`:
+
+```ts
+import { tsGuard } from 'shim';
+
+const trustedData = tsGuard(data as ExpectedType);
+```
+
+Add build script to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "ts-guard"
+  }
+}
+```
 
 ## How It Works
 
