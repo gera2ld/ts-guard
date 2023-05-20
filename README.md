@@ -14,6 +14,8 @@ see if they exist.
 By using `ts-guard`, every guarded object will have all the promised fields. So
 we can read the properties directly without checking null values everywhere.
 
+Free your mind and enjoy promised TypeScript.
+
 ## Usage
 
 ### Use with Deno
@@ -22,7 +24,7 @@ In a TypeScript project, run the following command to compile (consider a
 replacement of `tsc`):
 
 ```bash
-$ deno run -A https://github.com/gera2ld/ts-guard/raw/main/main.ts
+$ deno run -A https://github.com/gera2ld/ts-guard/raw/main/src/main.ts
 ```
 
 ### Use with Node
@@ -43,45 +45,4 @@ future.
 
 ## Demo
 
-Create a project with a `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "target": "es6",
-    "module": "es6",
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "jsx": "preserve"
-  },
-  "include": [
-    "src/**/*.ts"
-  ]
-}
-```
-
-And a TS file `src/index.ts`:
-
-```ts
-interface IData {
-  strings: string[];
-  obj: {
-    tada: number;
-  };
-}
-
-const data = tsGuard({} as IData);
-console.log(data);
-```
-
-Assuming we get an empty object from backend or somewhere out of our control.
-But it is supposed to be with a type of `IData`.
-
-By wrapping it with `tsGuard(...)` and compiling with `ts-guard`, the output of
-the script above will be `{ strings: [], obj: {} }` instead of an empty object
-`{}`.
-
-So we can call array functions on `data.strings` or read `data.obj.tada` without
-checking the existence of `data.strings` and `data.obj`.
-
-Free your mind and enjoy promised TypeScript.
+See [fixtures](./fixtures/).

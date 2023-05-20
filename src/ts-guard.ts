@@ -4,8 +4,8 @@ import {
   ProjectOptions,
   ts,
   Type,
-} from "https://deno.land/x/ts_morph@17.0.1/mod.ts";
-import { readTemplate } from "./util.ts";
+} from "https://deno.land/x/ts_morph@18.0.0/mod.ts";
+import { getTemplate } from "./util.ts";
 
 enum DataType {
   others,
@@ -136,7 +136,7 @@ async function updateGuards(
   { typeMap, files }: { typeMap: ITypeMap; files: [string, IGuardInfo[]][] },
 ) {
   const ruleMap = getRulesFromTypes(typeMap);
-  let template = await readTemplate("./ts-guard.tpl.ts");
+  let template = await getTemplate();
   const rules = Object.entries(ruleMap).map(
     ([key, { rule, text }]) =>
       `/* ${text} */

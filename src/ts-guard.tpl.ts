@@ -14,7 +14,7 @@ const ruleMap: Record<number, ICompactGuardRule> = {
 
 export function $tsGuard$<T>(id: number, value: T, prop?: string): T {
   const rule = ruleMap[id];
-  if (rule) guard(prop ? value[prop] : value, rule);
+  if (rule) guard(prop ? (value as any)[prop] : value, rule);
   return value;
 }
 
@@ -27,7 +27,7 @@ function guard(obj: any, rule: ICompactGuardRule) {
     if (type === TYPE_ARRAY) {
       if (children) {
         const [childRule] = children;
-        value = value.map((item) => guard(item, childRule));
+        value = value.map((item: any) => guard(item, childRule));
       }
     } else {
       if (children) {

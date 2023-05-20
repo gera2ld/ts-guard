@@ -1,11 +1,17 @@
-import { build, emptyDir } from "https://deno.land/x/dnt@0.33.1/mod.ts";
+import { assert } from "https://deno.land/std@0.188.0/testing/asserts.ts";
+import { build, emptyDir } from "https://deno.land/x/dnt@0.35.0/mod.ts";
+
+const p = new Deno.Command("./fixtures/test.sh").spawn();
+const status = await p.status;
+assert(status.success);
 
 await emptyDir("./npm");
 
 await build({
-  entryPoints: ["ts-guard.ts", {
-    name: "./shim",
-    path: "shim.ts",
+  entryPoints: ["src/ts-guard.ts", {
+    kind: 'bin',
+    name: 'ts-guard',
+    path: 'src/main.ts',
   }],
   outDir: "./npm",
   shims: {
@@ -23,17 +29,20 @@ await build({
     bugs: {
       url: "https://github.com/gera2ld/ts-guard/issues",
     },
-    bin: "./ts-guard.js",
-    "publishConfig": {
-      "access": "public",
-      "registry": "https://registry.npmjs.org/",
+    publishConfig: {
+      access: "public",
+      registry: "https://registry.npmjs.org/",
     },
   },
   mappings: {
-    "./util.ts": "./util.node.ts",
-    "https://deno.land/x/ts_morph@17.0.1/mod.ts": {
+    "./src/util.ts": "./src/util.node.ts",
+    "https://deno.land/x/ts_morph@18.0.0/mod.ts": {
       name: "ts-morph",
-      version: "17.0.1",
+      version: "^18.0.0",
+    },
+    'https://esm.sh/cac': {
+      name: 'cac',
+      version: '^6.7.14'
     },
   },
   test: false,
@@ -41,8 +50,5 @@ await build({
 
 Deno.copyFileSync("LICENSE", "npm/LICENSE");
 Deno.copyFileSync("README.md", "npm/README.md");
-Deno.writeTextFile(
-  "npm/ts-guard.js",
-  `#!/usr/bin/env node\n\nrequire('.').compile();`,
-  { mode: 0o755 },
-);
+Deno.copyFileSync("shim.d.ts", "npm/shim.d.ts");
+Deno.copyFileSync("src/ts-guard.tpl.ts", "npm/ts-guard.tpl.ts");
