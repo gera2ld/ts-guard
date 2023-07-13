@@ -1,82 +1,112 @@
-# ts-guard
+# @gera2ld/ts-guard
 
-Guard your objects in TypeScript to make sure all fields have the expected
-types.
+Guard your objects in TypeScript to make sure all fields have the expected types.
 
-## Why
+Example:
 
-When interacting with backend, we don't always get the promised data structure.
-For example, the backend developer promises us that a field will always return a
-list, but when it's empty we actually get `null` instead of `[]`, leading to a
-page crash. So we can't trust promises, instead we have to check each field to
-see if they exist.
+```ts
+interface ListResponse {
+  error: number;
+  list: Item[];
+}
 
-By using `ts-guard`, every guarded object will have all the promised fields. So
-we can read the properties directly without checking null values everywhere.
+// BE somehow returns `{ error: 0 }` without `list`
+const data: ListResponse = await fetchData(); // -> { error: 0 }
 
-Free your mind and enjoy promised TypeScript.
+// TS guard makes sure it is as declared
+const safeData: ListResponse = tsGuard(data); // -> { error: 0, list: [] }
+```
+
+## Installation
+
+```bash
+$ pnpm install @gera2ld/ts-guard
+```
 
 ## Usage
 
-### Use with Deno
+### Code Change
 
-In a TypeScript project, run the following command to compile (consider a
-replacement of `tsc`):
+```diff
++ import { tsGuard } from '@gera2ld/ts-guard/shim';
 
-```bash
-$ deno run -A https://github.com/gera2ld/ts-guard/raw/main/src/main.ts
-```
-
-### Use with Node
-
-Install the package locally:
-
-```bash
-$ pnpm i @gera2ld/ts-guard
-```
-
-Add shim to `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "shim": ["./node_modules/@gera2ld/ts-guard/shim.d.ts"]
-    }
+  export function fetchData() {
+-   const res = await axios.get<ListResponse>('/api/fetch-data');
++   // Guard the types of res.data
++   const res = tsGuard(await axios.get<ListResponse>('/api/fetch-data'), 'data');
+    return res;
   }
-}
 ```
 
-Wrap your data with `tsGuard`:
+## Integration with Bundlers
+
+### Rollup
+
+Add a plugin to `rollup.conf.js`:
+
+```js
+import { tsGuardRollup } from "@gera2ld/ts-guard/rollup";
+
+export default async () => {
+  const tsGuard = await tsGuardRollup({
+    rootDir: "src",
+  });
+  return {
+    // ...
+    plugins: [
+      tsGuard,
+      // ...
+    ],
+  };
+};
+```
+
+### Webpack
+
+First compile a subfolder with ts-guard in command-line:
+
+```bash
+$ npx @gera2ld/ts-guard <root_dir>
+```
+
+All `.ts` files within `<root_dir>` will be compiled to `.js` files in the same directory.
+
+Make sure to tell Webpack to resolve to `.js` file if both `.js` and `.ts` exist. This is the default behavior so usually you don't need to do anything.
+
+Then compile the project as usual.
+
+## Why
+
+We cannot guarentee what we get from another service has the structure we expect even if when use TypeScript.
+
+Take the example above, if BE returns `{ error: 0 }` without `list`, our page might break:
+
+```html
+<div>Total: {data.list.length}</div>
+```
+
+We don't want to check `null` for every field, which is why we use TypeScript. So we use `ts-guard` to ensure this.
+
+## Result
+
+The compiled code looks like this:
 
 ```ts
-import { tsGuard } from 'shim';
+import { $tsGuard$ } from "./_ts_guard.js";
 
-const trustedData = tsGuard(data as ExpectedType);
-```
-
-Add build script to `package.json`:
-
-```json
-{
-  "scripts": {
-    "build": "ts-guard"
-  }
+export function fetchData() {
+  const res = $tsGuard$(
+    /* ListResponse */ 1,
+    await axios.get("/api/fetch-data"),
+    "data"
+  );
+  return res;
 }
 ```
 
-## How It Works
+Even if `/api/fetch-data` returns `{ error: 0 }`, `$tsGuard$` will patch the response into `{ error: 0, list: [] }`.
 
-This tool scans the TypeScript files and resolves the types of objects passed to
-`tsGuard`. Then it generates a group of rules at compile time. The rules will be
-evaluated at runtime and the input object will be manipulated until it fully
-satisfies the rules, i.e. it has the promised data structure as in our type
-declarations.
+## Caveat
 
-Note: only `object` and `array` types are checked for now, since they are the
-cause of our page crash most of the time. Other types might be added in the
-future.
-
-## Demo
-
-See [fixtures](./fixtures/).
+- Currently only arrays and objects are checked. Other types are ignored to minimize the overhead, but it is possible to support all types.
+- If the absence of a field has a different meaning, you should either not pass it to `tsGuard`, or mark the field as _optional_ (`list?: Item[]`).

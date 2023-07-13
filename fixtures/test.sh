@@ -2,5 +2,5 @@
 set -ex
 cd `dirname $0`
 rm -rf dist
-deno run -A ../src/main.ts
+node ../cli.js --outDir dist src
 node dist && echo Test passed || echo Test failed

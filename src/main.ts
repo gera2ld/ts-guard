@@ -1,16 +1,23 @@
-import { cac } from "https://esm.sh/cac";
-import { compile } from "./ts-guard.ts";
+import { cac } from 'cac';
+import { compile, writeFiles } from './ts-guard';
 
-const cli = cac();
+const cli = cac('ts-guard');
 cli
-  .command("")
-  .option("-p, --project", "Specify the path of tsconfig", {
-    default: "tsconfig.json",
+  .command('<rootDir>', 'Compile a folder')
+  .option('-p, --project', 'Specify the path of tsconfig', {
+    default: 'tsconfig.json',
   })
-  .action((options: { project?: string }) => {
-    compile({
+  .option('--guardFile <filepath>', 'Specify the path of guard data, `<rootDir>/_ts_guard.ts` by default')
+  .option('--outDir <outDir>', 'The directory to write the emitted files, use the same directory by default')
+  .action(async (rootDir: string, options) => {
+    const files = await compile({
+      rootDir,
+      guardFile: options.guardFile,
+    }, {
       tsConfigFilePath: options.project,
     });
+    await writeFiles(files, options.outDir || rootDir);
   });
 
+cli.help();
 cli.parse();

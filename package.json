@@ -1,0 +1,64 @@
+{
+  "name": "@gera2ld/ts-guard",
+  "version": "0.1.1",
+  "description": "Guard your object with TypeScript declarations",
+  "bin": "./cli.js",
+  "scripts": {
+    "test": "./fixtures/test.sh",
+    "clean": "rm -rf lib",
+    "build:js": "rollup -c",
+    "build:types": "tsc",
+    "build": "run-s clean build:*",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "cli.js",
+    "lib"
+  ],
+  "author": "Gerald <gera2ld@live.com>",
+  "license": "ISC",
+  "type": "module",
+  "module": "lib/ts-guard.js",
+  "exports": {
+    ".": {
+      "types": "./lib/ts-guard.d.ts",
+      "require": "./lib/ts-guard.cjs",
+      "import": "./lib/ts-guard.js"
+    },
+    "./rollup": {
+      "types": "./lib/rollup.d.ts",
+      "require": "./lib/rollup.cjs",
+      "import": "./lib/rollup.js"
+    },
+    "./shim": {
+      "types": "./lib/shim.d.ts",
+      "require": "./lib/shim.cjs",
+      "import": "./lib/shim.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "shim": ["./lib/shim.d.ts"]
+    }
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.22.6",
+    "cac": "^6.7.14",
+    "ts-morph": "^19.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.22.9",
+    "@babel/plugin-transform-runtime": "^7.22.9",
+    "@babel/preset-env": "^7.22.9",
+    "@babel/preset-typescript": "^7.22.5",
+    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-replace": "^5.0.2",
+    "@types/node": "^20.4.2",
+    "gzip-size-cli": "^5.1.0",
+    "npm-run-all": "^4.1.5",
+    "pretty-bytes-cli": "^3.0.0",
+    "rollup": "^3.26.2",
+    "terser": "^5.19.0",
+    "typescript": "^5.1.6"
+  }
+}

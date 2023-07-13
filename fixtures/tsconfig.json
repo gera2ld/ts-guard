@@ -1,14 +1,12 @@
 {
   "compilerOptions": {
-    "rootDir": "./src",
     "target": "es6",
     "module": "es6",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "jsx": "preserve",
-    "outDir": "dist",
     "paths": {
-      "shim": ["../shim.d.ts"]
+      "@gera2ld/ts-guard/shim": ["../lib/shim.d.ts"]
     }
   },
   "include": [

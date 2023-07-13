@@ -4,4 +4,6 @@
  *
  * It will be compiled by `ts-morph`.
  */
-export declare function tsGuard<T>(value: T, _key?: keyof T): T;
+export function tsGuard<T>(value: T, key?: keyof T): T {
+  return value;
+}
