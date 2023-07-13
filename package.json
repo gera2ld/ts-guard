@@ -1,6 +1,6 @@
 {
   "name": "@gera2ld/ts-guard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Guard your object with TypeScript declarations",
   "bin": "./cli.js",
   "scripts": {
@@ -38,7 +38,9 @@
   },
   "typesVersions": {
     "*": {
-      "shim": ["./lib/shim.d.ts"]
+      "shim": [
+        "./lib/shim.d.ts"
+      ]
     }
   },
   "dependencies": {
