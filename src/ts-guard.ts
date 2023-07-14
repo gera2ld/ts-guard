@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from 'fs/promises';
-import { resolve, relative, dirname } from 'path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, relative, dirname } from 'node:path';
 import {
   CallExpression,
   Project,
@@ -7,7 +7,7 @@ import {
   ScriptTarget,
   ts,
   Type,
-} from "ts-morph";
+} from 'ts-morph';
 
 const TS_GUARD_TEMPLATE = process.env.TS_GUARD_TEMPLATE;
 
@@ -45,8 +45,8 @@ type IGuardRule = {
    *
    * 0b 0 00
    *    |  |
-   *    |  +---- type of the field (`(flag >> 1) & 3`)
-   *    +------- whether the field optional (`flag & 1`)
+   *    |  +---- type of the field (`flag & 3`)
+   *    +------- whether the field is optional (`(flag >> 2) & 1`)
    */
   flag: number;
   /**
@@ -79,14 +79,17 @@ export interface ITsGuardBuildOptions {
 let id = 0;
 const typeMap: ITypeMap = new Map();
 
-export async function compile(buildOptions: ITsGuardBuildOptions, projectOptions?: ProjectOptions) {
+export function compile(
+  buildOptions: ITsGuardBuildOptions,
+  projectOptions?: ProjectOptions,
+) {
   /**
    * `outDir` is passed to tsc as `compilerOptions.outDir` and used to calculate file paths in the memory.
    * It does't affect the path of files written to the local file system.
    */
   const outDir = 'lib';
   const project = new Project({
-    tsConfigFilePath: "tsconfig.json",
+    tsConfigFilePath: 'tsconfig.json',
     ...projectOptions,
     compilerOptions: {
       ...projectOptions?.compilerOptions,
@@ -99,7 +102,7 @@ export async function compile(buildOptions: ITsGuardBuildOptions, projectOptions
   const { rootDir } = buildOptions;
   let guardFile = buildOptions.guardFile || `${rootDir}/_ts_guard.ts`;
   guardFile = guardFile.replace(/\.jsx?$/, '.ts');
-  await updateGuards(project, scanFiles(project), guardFile);
+  updateGuards(project, scanFiles(project), guardFile);
   // project.emitSync();
   const result = project.emitToMemory();
 
@@ -116,28 +119,34 @@ export async function compile(buildOptions: ITsGuardBuildOptions, projectOptions
   return files;
 }
 
-export async function writeFiles(files: Record<string, string>, outDir: string) {
+export async function writeFiles(
+  files: Record<string, string>,
+  outDir: string,
+  callbacks?: {
+    onWriteFile?: (relpath: string) => void;
+  },
+) {
   for (const [relpath, content] of Object.entries(files)) {
     const fullPath = resolve(outDir, relpath);
     await mkdir(dirname(fullPath), { recursive: true });
     await writeFile(fullPath, content, 'utf8');
-    console.log(relpath);
+    callbacks?.onWriteFile?.(relpath);
   }
 }
 
 function guardType(type: Type<ts.Type>) {
   // const key = type.getSymbolOrThrow();
   const key = serialize(getTypeInfo(type));
-  const text = type.getText().split(".").pop();
+  const text = type.getText().split('.').pop();
   let value = typeMap.get(key);
-  if (value == null) {
+  if (value === undefined) {
     typeMap.set(
       key,
-      value = {
+      (value = {
         id: ++id,
         info: getTypeInfo(type),
         text,
-      },
+      }),
     );
   }
   return { value, text };
@@ -166,21 +175,27 @@ function scanFiles(project: Project) {
     // console.log("Visit file:", sourceFile.getFilePath());
     const guards: IGuardInfo[] = [];
     sourceFile.forEachDescendant((node) => {
-      if (!node.isKind(ts.SyntaxKind.CallExpression)) return;
+      if (!node.isKind(ts.SyntaxKind.CallExpression)) {
+        return;
+      }
       const identifier = node.getExpressionIfKind(ts.SyntaxKind.Identifier);
       const identifierName = identifier?.getText();
       let guard: IGuardInfo | undefined;
-      if (identifierName === "tsGuard") {
+      if (identifierName === 'tsGuard') {
         guard = getGuardInfo(project, node);
       }
-      if (guard) guards.push(guard);
+      if (guard) {
+        guards.push(guard);
+      }
     });
-    if (guards.length) filesWithGuard.push([sourceFile.getFilePath(), guards]);
+    if (guards.length > 0) {
+      filesWithGuard.push([sourceFile.getFilePath(), guards]);
+    }
   }
   return { typeMap, files: filesWithGuard };
 }
 
-async function updateGuards(
+function updateGuards(
   project: Project,
   { typeMap, files }: { typeMap: ITypeMap; files: [string, IGuardInfo[]][] },
   guardFilePath: string,
@@ -192,26 +207,30 @@ async function updateGuards(
 ${key}: ${JSON.stringify(compactRule(rule))}`,
   );
   const template = TS_GUARD_TEMPLATE.replace(
-    /\{\s*\/\* RULE_MAP \*\/\s*\}/,
-    `{\n${rules.join(",\n")}\n}`,
+    /{\s*\/\* RULE_MAP \*\/\s*}/,
+    `{\n${rules.join(',\n')}\n}`,
   );
   const guardFile = project.createSourceFile(guardFilePath, template);
-  files.forEach(([path, info]) => {
+  for (const [path, info] of files) {
     const sourceFile = project.getSourceFileOrThrow(path);
     let guardPath = sourceFile.getRelativePathTo(guardFile);
-    guardPath = guardPath.replace(/\.tsx?$/, ".js");
-    if (!guardPath.startsWith(".")) guardPath = `./${guardPath}`;
+    guardPath = guardPath.replace(/\.tsx?$/, '.js');
+    if (!guardPath.startsWith('.')) {
+      guardPath = `./${guardPath}`;
+    }
     sourceFile.addImportDeclaration({
       moduleSpecifier: guardPath,
-      namedImports: ["$tsGuard$"],
+      namedImports: ['$tsGuard$'],
     });
-    info.forEach(([node, id]) => {
+    for (const [node, id] of info) {
       const identifier = node.getExpressionIfKind(ts.SyntaxKind.Identifier);
-      if (!identifier) return;
-      identifier.replaceWithText("$tsGuard$");
+      if (!identifier) {
+        continue;
+      }
+      identifier.replaceWithText('$tsGuard$');
       node.insertArgument(0, id);
-    });
-  });
+    }
+  }
 }
 
 function getTypeInfo(type: Type<ts.Type>): ITypeInfo {
@@ -224,10 +243,9 @@ function getTypeInfo(type: Type<ts.Type>): ITypeInfo {
   if (type.isTuple()) {
     return {
       type: DataType.tuple,
-      param: type.getTupleElements().reduce((prev, type, i) => {
-        prev[i] = getTypeInfo(type);
-        return prev;
-      }, {} as Record<number, ITypeInfo>),
+      param: Object.fromEntries(
+        type.getTupleElements().map((type, i) => [i, getTypeInfo(type)]),
+      ),
     };
   }
   if (type.isClassOrInterface() || type.isObject()) {
@@ -250,24 +268,29 @@ function getRulesFromTypes(typeMap: ITypeMap) {
   for (const { id, info, text } of typeMap.values()) {
     if ([DataType.array, DataType.object].includes(info.type)) {
       const rule = getRuleFromType(info);
-      if (rule) ruleMap[id] = { text, rule };
+      if (rule) {
+        ruleMap[id] = { text, rule };
+      }
     }
   }
   return ruleMap;
 }
 
-function getRuleFromType(info: ITypeInfo, name = ""): IGuardRule | undefined {
+function getRuleFromType(info: ITypeInfo, name = ''): IGuardRule | undefined {
   if (info.type === DataType.array) {
     const child = info.param && getRuleFromType(info.param);
     const result: IGuardRule = {
       name,
       flag: calcTypeFlag(info.type, info.optional),
     };
-    if (child) result.children = [child];
+    if (child) {
+      result.children = [child];
+    }
     return result;
   }
   if (info.type === DataType.object || info.type === DataType.tuple) {
-    const children = info.param &&
+    const children =
+      info.param &&
       (Object.entries(info.param)
         .map(([key, value]) => getRuleFromType(value, key))
         .filter(Boolean) as IGuardRule[]);
@@ -275,38 +298,41 @@ function getRuleFromType(info: ITypeInfo, name = ""): IGuardRule | undefined {
       name,
       flag: calcTypeFlag(info.type, info.optional),
     };
-    if (children?.length) result.children = children;
+    if (children?.length) {
+      result.children = children;
+    }
     return result;
   }
 }
 
 function compactRule(rule: IGuardRule) {
   const data: ICompactGuardRule = [rule.flag];
-  if (rule.name || rule.children) data.push(rule.name || "");
-  if (rule.children) data.push(rule.children.map(compactRule));
+  if (rule.name || rule.children) {
+    data.push(rule.name || '');
+  }
+  if (rule.children) {
+    data.push(rule.children.map((child) => compactRule(child)));
+  }
   return data;
 }
 
 function serialize(info: any): string {
   if (Array.isArray(info)) {
-    return "[" + info.map(serialize).join(",") + "]";
+    return '[' + info.map((child) => serialize(child)).join(',') + ']';
   }
-  if (info && typeof info === "object") {
+  if (info && typeof info === 'object') {
     return (
-      "{" +
+      '{' +
       Object.keys(info)
         .sort()
         .map((key) => `${JSON.stringify(key)}:${serialize(info[key])}`)
-        .join(",") +
-      "}"
+        .join(',') +
+      '}'
     );
   }
   return JSON.stringify(info);
 }
 
-function calcTypeFlag(
-  type: DataType,
-  optional?: boolean,
-) {
+function calcTypeFlag(type: DataType, optional?: boolean) {
   return (+!!optional << 2) + type;
 }

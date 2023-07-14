@@ -7,17 +7,34 @@ cli
   .option('-p, --project', 'Specify the path of tsconfig', {
     default: 'tsconfig.json',
   })
-  .option('--guardFile <filepath>', 'Specify the path of guard data, `<rootDir>/_ts_guard.ts` by default')
-  .option('--outDir <outDir>', 'The directory to write the emitted files, use the same directory by default')
+  .option(
+    '-g, --guardFile <filepath>',
+    'Specify the path of guard data, `<rootDir>/_ts_guard.ts` by default',
+  )
+  .option(
+    '-o, --outDir <outDir>',
+    'The directory to write the emitted files, use the same directory by default',
+  )
+  .option('-s, --silent', 'Silent mode')
   .action(async (rootDir: string, options) => {
-    const files = await compile({
-      rootDir,
-      guardFile: options.guardFile,
-    }, {
-      tsConfigFilePath: options.project,
+    const files = compile(
+      {
+        rootDir,
+        guardFile: options.guardFile,
+      },
+      {
+        tsConfigFilePath: options.project,
+      },
+    );
+    const outDir = options.outDir || rootDir;
+    await writeFiles(files, outDir, {
+      onWriteFile(relpath) {
+        if (options.silent) {
+          return;
+        }
+        console.log(`File written: <root>/${relpath}`);
+      },
     });
-    await writeFiles(files, options.outDir || rootDir);
   });
 
-cli.help();
 cli.parse();

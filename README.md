@@ -45,19 +45,16 @@ $ pnpm install @gera2ld/ts-guard
 Add a plugin to `rollup.conf.js`:
 
 ```js
-import { tsGuardRollup } from "@gera2ld/ts-guard/rollup";
+import { tsGuardRollup } from '@gera2ld/ts-guard/rollup';
 
-export default async () => {
-  const tsGuard = await tsGuardRollup({
-    rootDir: "src",
-  });
-  return {
+export default {
+  // ...
+  plugins: [
+    tsGuardRollup({
+      rootDir: 'src',
+    }),
     // ...
-    plugins: [
-      tsGuard,
-      // ...
-    ],
-  };
+  ],
 };
 ```
 
@@ -92,13 +89,13 @@ We don't want to check `null` for every field, which is why we use TypeScript. S
 The compiled code looks like this:
 
 ```ts
-import { $tsGuard$ } from "./_ts_guard.js";
+import { $tsGuard$ } from './_ts_guard.js';
 
 export function fetchData() {
   const res = $tsGuard$(
     /* ListResponse */ 1,
-    await axios.get("/api/fetch-data"),
-    "data"
+    await axios.get('/api/fetch-data'),
+    'data',
   );
   return res;
 }

@@ -1,4 +1,4 @@
-import { dirname, resolve, relative } from 'path';
+import { dirname, resolve, relative } from 'node:path';
 import { ProjectOptions } from 'ts-morph';
 import { ITsGuardBuildOptions, compile } from './ts-guard';
 
@@ -9,12 +9,12 @@ function normalizeId(rootDir: string, id: string) {
   }
 }
 
-export async function tsGuardRollup(
+export function tsGuardRollup(
   buildOptions: ITsGuardBuildOptions,
   projectOptions?: ProjectOptions,
 ) {
   const rootDir = resolve(buildOptions.rootDir);
-  const files = await compile(buildOptions, projectOptions);
+  const files = compile(buildOptions, projectOptions);
   return {
     name: 'ts-guard-rollup',
     resolveId: (importee: string, importer?: string) => {
