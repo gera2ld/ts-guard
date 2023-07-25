@@ -31,35 +31,41 @@ const getPlugins = async () => [
   }),
   {
     name: 'fix-extension',
-    transform(code) {
-      return code.replace(
-        /(['"])(.\/[^.]+?)\1/g,
-        (_, q, g) => `${q}${g}.js${q}`,
-      );
+    generateBundle(options, bundle) {
+      Object.keys(bundle).forEach(key => {
+        const value = bundle[key];
+        if (value.type !== 'chunk') return;
+        value.code = value.code.replace(
+          /(['"])(.\/[^.]+?)\1/g,
+          (_, q, g) => `${q}${g}.${options.format === 'cjs' ? 'cjs' : 'js'}${q}`,
+        );
+      });
     },
   },
 ];
 
 export default async () => {
   const plugins = await getPlugins();
-  return ['ts-guard', 'main', 'rollup', 'shim'].flatMap((basename) => [
-    {
-      input: `./src/${basename}.ts`,
-      plugins,
-      external,
-      output: {
-        format: 'es',
-        file: `./lib/${basename}.js`,
+  return ['ts-guard', 'main', 'rollup', 'webpack', 'shim'].flatMap(
+    (basename) => [
+      {
+        input: `./src/${basename}.ts`,
+        plugins,
+        external,
+        output: {
+          format: 'es',
+          file: `./lib/${basename}.js`,
+        },
       },
-    },
-    {
-      input: `./src/${basename}.ts`,
-      plugins,
-      external,
-      output: {
-        format: 'cjs',
-        file: `./lib/${basename}.cjs`,
+      {
+        input: `./src/${basename}.ts`,
+        plugins,
+        external,
+        output: {
+          format: 'cjs',
+          file: `./lib/${basename}.cjs`,
+        },
       },
-    },
-  ]);
+    ],
+  );
 };

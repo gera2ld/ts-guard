@@ -32,6 +32,11 @@
       "require": "./lib/rollup.cjs",
       "import": "./lib/rollup.js"
     },
+    "./webpack": {
+      "types": "./lib/webpack.d.ts",
+      "require": "./lib/webpack.cjs",
+      "import": "./lib/webpack.js"
+    },
     "./shim": {
       "types": "./lib/shim.d.ts",
       "require": "./lib/shim.cjs",
@@ -48,7 +53,8 @@
   "dependencies": {
     "@babel/runtime": "^7.22.6",
     "cac": "^6.7.14",
-    "ts-morph": "^19.0.0"
+    "ts-morph": "^19.0.0",
+    "webpack-virtual-modules": "^0.5.0"
   },
   "devDependencies": {
     "@babel/core": "^7.22.9",
