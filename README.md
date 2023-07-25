@@ -60,6 +60,28 @@ export default {
 
 ### Webpack
 
+#### Approach 1: Using a plugin
+
+Update your `webpack.config.js`:
+
+```js
+import { TsGuardPlugin } from '@gera2ld/ts-guard/webpack';
+
+export default {
+  // ...
+  plugins: [
+    // ...
+    new TsGuardPlugin({
+      rootDir: 'src',
+    }),
+  ],
+};
+```
+
+**Note:** it doesn't work with `thread-loader`.
+
+#### Approach 2: Compiling ahead of time
+
 First compile a subfolder with ts-guard in command-line:
 
 ```bash
