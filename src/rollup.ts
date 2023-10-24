@@ -7,6 +7,7 @@ function normalizeId(rootDir: string, id: string) {
   if (!relpath.startsWith('../')) {
     return relpath;
   }
+  return '';
 }
 
 export function tsGuardRollup(

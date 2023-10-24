@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
-set -ex
-cd `dirname $0`
+#!/bin/sh
+set -e
+cd $(dirname $0)
 rm -rf dist
 node ../cli.js --outDir dist src
-node dist && echo Test passed || echo Test failed
+node dist && echo Tests passed || echo Tests failed

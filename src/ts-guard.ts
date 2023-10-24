@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, relative, dirname } from 'node:path';
 import {
@@ -9,7 +10,7 @@ import {
   Type,
 } from 'ts-morph';
 
-const TS_GUARD_TEMPLATE = process.env.TS_GUARD_TEMPLATE;
+const TS_GUARD_TEMPLATE = process.env.TS_GUARD_TEMPLATE as string;
 
 enum DataType {
   others,
@@ -18,50 +19,46 @@ enum DataType {
   tuple,
 }
 
-interface IArrayTypeInfo {
-  type: DataType.array;
-  param?: ITypeInfo;
-  optional?: boolean;
-}
-
-interface IObjectTypeInfo {
-  type: DataType.object | DataType.tuple;
-  param?: Record<string, ITypeInfo>;
-  optional?: boolean;
-}
-
-interface IOtherTypeInfo {
-  type: DataType.others;
-  optional?: boolean;
-}
-
-type ITypeInfo = IArrayTypeInfo | IObjectTypeInfo | IOtherTypeInfo;
-
-type IGuardRule = {
-  /** The name of the current field. */
-  name: string;
+interface ITypeInfo {
+  type: DataType;
   /**
-   * The properties of the current field.
-   *
-   * 0b 0 00
-   *    |  |
-   *    |  +---- type of the field (`flag & 3`)
-   *    +------- whether the field is optional (`(flag >> 2) & 1`)
+   * For `DataType.array`, `param['']` is considered the type of its children.
+   * For `DataType.object`, `param` should be `{ [key]: childType }`.
+   * For others, `param` is ignored.
    */
-  flag: number;
+  param?: Record<
+    string,
+    {
+      /** The key of an existing type. */
+      ref: string;
+      optional?: boolean;
+    }
+  >;
+}
+
+interface ITypeMeta {
+  info: ITypeInfo;
+  /** The name of the type for debugging purpose. */
+  text?: string;
+}
+
+interface ITypeMap {
+  [key: string]: ITypeMeta;
+}
+
+type IGuardRule = [ref: string, name?: string, optional?: 0 | 1];
+
+/** Translate `ITypeInfo` into a more machine friendly format. */
+interface IGuardType {
+  type: DataType;
   /**
    * The field rules of this object, only applicable when the current field
    * is an object or an array of objects.
    */
-  children?: IGuardRule[];
-};
-type ICompactGuardRule = [
-  flag: number,
-  name?: string,
-  children?: ICompactGuardRule[],
-];
+  rules?: IGuardRule[];
+}
 
-type ITypeMap = Map<string, { id: number; info: ITypeInfo; text?: string }>;
+type IGuardMap = Record<string, IGuardType>;
 
 type IGuardInfo = [CallExpression<ts.CallExpression>, string];
 
@@ -75,9 +72,6 @@ export interface ITsGuardBuildOptions {
    */
   guardFile?: string;
 }
-
-let id = 0;
-const typeMap: ITypeMap = new Map();
 
 export function compile(
   buildOptions: ITsGuardBuildOptions,
@@ -134,27 +128,10 @@ export async function writeFiles(
   }
 }
 
-function guardType(type: Type<ts.Type>) {
-  // const key = type.getSymbolOrThrow();
-  const key = serialize(getTypeInfo(type));
-  const text = type.getText().split('.').pop();
-  let value = typeMap.get(key);
-  if (value === undefined) {
-    typeMap.set(
-      key,
-      (value = {
-        id: ++id,
-        info: getTypeInfo(type),
-        text,
-      }),
-    );
-  }
-  return { value, text };
-}
-
 function getGuardInfo(
   project: Project,
   node: CallExpression<ts.CallExpression>,
+  typeMap: ITypeMap,
 ) {
   const propArg = node.getArguments()[1];
   const prop = propArg?.getType().getLiteralValueOrThrow() as string;
@@ -164,13 +141,15 @@ function getGuardInfo(
   const type = prop
     ? responseType.getPropertyOrThrow(prop).getTypeAtLocation(node)
     : responseType;
-  const { value, text } = guardType(type);
-  return [node, `/* ${text} */ ${value.id}`] as IGuardInfo;
+  const text = type.getText().split('.').pop();
+  const key = addTypeInfo(typeMap, type, text);
+  return [node, `/* ${text} */ ${JSON.stringify(key)}`] as IGuardInfo;
 }
 
 function scanFiles(project: Project) {
   const sourceFiles = project.getSourceFiles();
   const filesWithGuard: [string, IGuardInfo[]][] = [];
+  const typeMap: ITypeMap = {};
   for (const sourceFile of sourceFiles) {
     // console.log("Visit file:", sourceFile.getFilePath());
     const guards: IGuardInfo[] = [];
@@ -182,7 +161,7 @@ function scanFiles(project: Project) {
       const identifierName = identifier?.getText();
       let guard: IGuardInfo | undefined;
       if (identifierName === 'tsGuard') {
-        guard = getGuardInfo(project, node);
+        guard = getGuardInfo(project, node, typeMap);
       }
       if (guard) {
         guards.push(guard);
@@ -200,11 +179,11 @@ function updateGuards(
   { typeMap, files }: { typeMap: ITypeMap; files: [string, IGuardInfo[]][] },
   guardFilePath: string,
 ) {
-  const ruleMap = getRulesFromTypes(typeMap);
-  const rules = Object.entries(ruleMap).map(
-    ([key, { rule, text }]) =>
-      `/* ${text} */
-${key}: ${JSON.stringify(compactRule(rule))}`,
+  const guardMap = getRulesFromTypes(typeMap);
+  const rules = Object.entries(guardMap).map(
+    ([key, guard]) =>
+      `/* ${typeMap[key].text || key} */
+${JSON.stringify(key)}: ${JSON.stringify([guard.type, guard.rules])}`,
   );
   const template = TS_GUARD_TEMPLATE.replace(
     /{\s*\/\* RULE_MAP \*\/\s*}/,
@@ -233,106 +212,156 @@ ${key}: ${JSON.stringify(compactRule(rule))}`,
   }
 }
 
-function getTypeInfo(type: Type<ts.Type>): ITypeInfo {
-  if (type.isArray()) {
-    return {
-      type: DataType.array,
-      param: getTypeInfo(type.getArrayElementTypeOrThrow()),
-    };
+function getTypeHash(typeInfo: ITypeInfo): string {
+  const payload = [
+    typeInfo.type,
+    ...sortedEntries(typeInfo.param).map(([key, { ref, optional }]) => [
+      key,
+      ref || '',
+      +!!optional,
+    ]),
+  ].join(':');
+  return createHash('sha256').update(payload).digest('hex').slice(0, 4);
+}
+
+function isSupportedObjectType(type: Type<ts.Type>) {
+  return (
+    type.isArray() ||
+    type.isTuple() ||
+    type.isClassOrInterface() ||
+    type.isObject()
+  );
+}
+
+function isPrimitiveType(type: Type<ts.Type>) {
+  return (
+    type.isNull() ||
+    type.isUndefined() ||
+    type.isVoid() ||
+    type.isNumber() ||
+    type.isBoolean() ||
+    type.isString() ||
+    type.isLiteral()
+  );
+}
+
+function getOnlyObjectType(type: Type<ts.UnionType>) {
+  const unionTypes = type.getUnionTypes();
+  const objectTypes = unionTypes.filter((type) => !isPrimitiveType(type));
+  if (objectTypes.length === 1) {
+    const [objectType] = objectTypes;
+    if (isSupportedObjectType(objectType)) {
+      return objectType;
+    }
   }
-  if (type.isTuple()) {
-    return {
+}
+
+function addTypeInfo(
+  typeMap: ITypeMap,
+  type: Type<ts.Type>,
+  text?: string,
+): string {
+  let typeInfo: ITypeInfo = { type: DataType.others };
+  if (type.isArray()) {
+    const childKey = addTypeInfo(typeMap, type.getArrayElementTypeOrThrow());
+    typeInfo = {
+      type: DataType.array,
+      param: childKey
+        ? {
+            '': { ref: childKey },
+          }
+        : undefined,
+    };
+  } else if (type.isTuple()) {
+    typeInfo = {
       type: DataType.tuple,
       param: Object.fromEntries(
-        type.getTupleElements().map((type, i) => [i, getTypeInfo(type)]),
+        type
+          .getTupleElements()
+          .map(
+            (type, i) =>
+              [i, { ref: addTypeInfo(typeMap, type) }] as [
+                number,
+                { ref: string },
+              ],
+          )
+          .filter(([, { ref }]) => ref),
       ),
     };
-  }
-  if (type.isClassOrInterface() || type.isObject()) {
+  } else if (type.isClassOrInterface() || type.isObject()) {
     const properties = type.getProperties();
-    const result: Record<string, ITypeInfo> = {};
+    const param: ITypeInfo['param'] = {};
     for (const property of properties) {
-      const propertyType = property.getValueDeclarationOrThrow().getType();
-      result[property.getName()] = {
-        ...getTypeInfo(propertyType),
-        optional: property.isOptional(),
-      };
-    }
-    return { type: DataType.object, param: result };
-  }
-  return { type: DataType.others };
-}
-
-function getRulesFromTypes(typeMap: ITypeMap) {
-  const ruleMap: Record<number, { rule: IGuardRule; text?: string }> = {};
-  for (const { id, info, text } of typeMap.values()) {
-    if ([DataType.array, DataType.object].includes(info.type)) {
-      const rule = getRuleFromType(info);
-      if (rule) {
-        ruleMap[id] = { text, rule };
+      let propertyType: Type<ts.Type> | undefined = property
+        .getValueDeclarationOrThrow()
+        .getType();
+      let optional = property.isOptional();
+      if (propertyType.isUnion()) {
+        propertyType = getOnlyObjectType(propertyType);
+        optional = true;
+      }
+      const childKey = propertyType && addTypeInfo(typeMap, propertyType);
+      if (childKey) {
+        param[property.getName()] = {
+          ref: childKey,
+          optional,
+        };
       }
     }
+    typeInfo = { type: DataType.object, param };
   }
-  return ruleMap;
-}
 
-function getRuleFromType(info: ITypeInfo, name = ''): IGuardRule | undefined {
-  if (info.type === DataType.array) {
-    const child = info.param && getRuleFromType(info.param);
-    const result: IGuardRule = {
-      name,
-      flag: calcTypeFlag(info.type, info.optional),
+  // Filter uninteresting types
+  if (typeInfo.type !== DataType.others) {
+    const key = getTypeHash(typeInfo);
+    typeMap[key] ||= {
+      info: typeInfo,
     };
-    if (child) {
-      result.children = [child];
+    if (text && !typeMap[key].text) {
+      typeMap[key].text = text;
     }
-    return result;
+    return key;
   }
-  if (info.type === DataType.object || info.type === DataType.tuple) {
-    const children =
-      info.param &&
-      (Object.entries(info.param)
-        .map(([key, value]) => getRuleFromType(value, key))
-        .filter(Boolean) as IGuardRule[]);
-    const result: IGuardRule = {
-      name,
-      flag: calcTypeFlag(info.type, info.optional),
-    };
-    if (children?.length) {
-      result.children = children;
-    }
-    return result;
-  }
+  return '';
 }
 
-function compactRule(rule: IGuardRule) {
-  const data: ICompactGuardRule = [rule.flag];
-  if (rule.name || rule.children) {
-    data.push(rule.name || '');
-  }
-  if (rule.children) {
-    data.push(rule.children.map((child) => compactRule(child)));
-  }
-  return data;
+function getRulesFromTypes(typeMap: ITypeMap): IGuardMap {
+  return Object.fromEntries(
+    Object.entries(typeMap)
+      .map(
+        ([key, { info }]) =>
+          [key, getRuleFromType(info)] as [key: string, guard: IGuardType],
+      )
+      .filter(([, { type }]) => type !== DataType.others),
+  );
 }
 
-function serialize(info: any): string {
-  if (Array.isArray(info)) {
-    return '[' + info.map((child) => serialize(child)).join(',') + ']';
-  }
-  if (info && typeof info === 'object') {
-    return (
-      '{' +
-      Object.keys(info)
-        .sort()
-        .map((key) => `${JSON.stringify(key)}:${serialize(info[key])}`)
-        .join(',') +
-      '}'
+function getRuleFromType(info: ITypeInfo): IGuardType {
+  const result: IGuardType = {
+    type: info.type,
+  };
+  if (info.type !== DataType.others) {
+    result.rules = sortedEntries(info.param).map(
+      ([name, { ref, optional }]) => {
+        const rule: IGuardRule = [ref, name, optional ? 1 : 0];
+        // Compact data
+        while (rule.length > 0 && !rule.at(-1)) {
+          rule.pop();
+        }
+        return rule;
+      },
     );
   }
-  return JSON.stringify(info);
+  return result;
 }
 
-function calcTypeFlag(type: DataType, optional?: boolean) {
-  return (+!!optional << 2) + type;
+function sortedEntries<T = unknown>(
+  obj: Record<string, T> | undefined,
+): [string, T][] {
+  if (!obj) {
+    return [];
+  }
+  return Object.keys(obj)
+    .sort()
+    .map((key) => [key, obj[key]]);
 }

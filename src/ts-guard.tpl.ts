@@ -1,51 +1,54 @@
-type ICompactGuardRule = [
-  flag: number,
-  name?: string,
-  children?: ICompactGuardRule[],
+type ICompactGuard = [
+  type: number,
+  rules: [ref: string, name?: string, optional?: 0 | 1][],
 ];
 
 const TYPE_OBJ = 1;
 const TYPE_ARRAY = 2;
 const TYPE_TUPLE = 3;
 
-const ruleMap: Record<number, ICompactGuardRule> = {
+const guardMap: Record<string, ICompactGuard> = {
   /* RULE_MAP */
 };
 
-export function $tsGuard$<T>(id: number, value: T, prop?: string): T {
-  const rule = ruleMap[id];
-  if (rule) {
-    guard(prop ? value[prop] : value, rule);
+export function $tsGuard$(key: string, value: any, prop?: string): any {
+  const guard = guardMap[key];
+  if (guard) {
+    guardType(prop ? value[prop] : value, guard);
   }
   return value;
 }
 
-function guard(obj: any, rule: ICompactGuardRule) {
-  const [flag, name, children] = rule;
-  const { optional, type } = readFlag(flag);
-  let value = name ? obj[name] : obj;
-  if (value || !optional) {
-    value = ensureType(value, type);
-    if (type === TYPE_ARRAY) {
-      if (children) {
-        const [childRule] = children;
-        value = value.map((item) => guard(item, childRule));
+function guardType(obj: any, guard: ICompactGuard, optional?: boolean) {
+  const [type, rules] = guard;
+  obj = ensureType(obj, type, optional);
+  if (obj && rules) {
+    for (const [ref, name, bOptional] of rules) {
+      const childGuard = guardMap[ref];
+      if (!childGuard) {
+        return;
       }
-    } else if (children) {
-      for (const child of children) {
-        value = guard(value, child);
+      const childOptional = !!bOptional;
+      if (type === TYPE_ARRAY && !name) {
+        for (let i = 0; i < obj.length; i += 1) {
+          obj[i] = guardType(obj[i], childGuard, childOptional);
+        }
       }
-    }
-    if (name) {
-      obj[name] = value;
-    } else {
-      obj = value;
+      if ([TYPE_TUPLE, TYPE_OBJ].includes(type) && name) {
+        const value = guardType(obj[name], childGuard, childOptional);
+        if (value !== undefined) {
+          obj[name] = value;
+        }
+      }
     }
   }
   return obj;
 }
 
-function ensureType(obj: any, type: number) {
+function ensureType(obj: any, type: number, optional?: boolean) {
+  if ((obj === null || obj === undefined) && optional) {
+    return obj;
+  }
   if ([TYPE_ARRAY, TYPE_TUPLE].includes(type) && !Array.isArray(obj)) {
     return [];
   }
@@ -53,11 +56,4 @@ function ensureType(obj: any, type: number) {
     return {};
   }
   return obj;
-}
-
-function readFlag(flag: number) {
-  const type = flag & 3;
-  flag >>= 2;
-  const optional = flag & 1;
-  return { optional, type };
 }

@@ -4,8 +4,7 @@ import replace from '@rollup/plugin-replace';
 import pkg from './package.json' assert { type: 'json' };
 
 const external = (id) =>
-  id.startsWith('@babel/runtime/') ||
-  id.startsWith('./') ||
+  /^(?:node:|@babel\/runtime\/|\.\/)/.test(id) ||
   Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).some(
     (dep) => id === dep || id.startsWith(`${dep}/`),
   );

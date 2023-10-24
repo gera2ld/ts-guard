@@ -8,6 +8,7 @@
     "emitDeclarationOnly": true,
     "jsx": "preserve",
     "skipLibCheck": true,
+    "strict": true,
     "outDir": "lib"
   },
   "include": [

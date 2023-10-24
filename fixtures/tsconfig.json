@@ -1,15 +1,18 @@
 {
   "compilerOptions": {
-    "target": "es6",
-    "module": "es6",
+    "target": "esnext",
+    "module": "esnext",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "jsx": "preserve",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "lib",
     "paths": {
-      "@gera2ld/ts-guard/shim": ["../lib/shim.d.ts"]
+      "@gera2ld/ts-guard/shim": ["../src/shim.ts"]
     }
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*"
   ]
 }
