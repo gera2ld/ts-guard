@@ -1,14 +1,15 @@
 import { readFile } from 'fs/promises';
+import { defineConfig } from 'rollup';
 import { babel } from '@rollup/plugin-babel';
 import replace from '@rollup/plugin-replace';
 import pkg from './package.json' assert { type: 'json' };
 
 const external = (id) =>
   /^(?:node:|@babel\/runtime\/|\.\/)/.test(id) ||
-  Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).some(
+  Object.keys(pkg.dependencies).some(
     (dep) => id === dep || id.startsWith(`${dep}/`),
   );
-const getPlugins = async () => [
+const plugins = [
   babel({
     babelHelpers: 'runtime',
     plugins: [
@@ -43,28 +44,22 @@ const getPlugins = async () => [
   },
 ];
 
-export default async () => {
-  const plugins = await getPlugins();
-  return ['ts-guard', 'main', 'rollup', 'webpack', 'shim'].flatMap(
-    (basename) => [
-      {
-        input: `./src/${basename}.ts`,
-        plugins,
-        external,
-        output: {
-          format: 'es',
-          file: `./lib/${basename}.js`,
-        },
-      },
-      {
-        input: `./src/${basename}.ts`,
-        plugins,
-        external,
-        output: {
-          format: 'cjs',
-          file: `./lib/${basename}.cjs`,
-        },
-      },
-    ],
-  );
-};
+export default defineConfig({
+  input: {
+    cli: './src/cli.ts',
+    rollup: './src/rollup.ts',
+    shim: './src/shim.ts',
+    webpack: './src/webpack.ts',
+    'ts-guard': './src/ts-guard.ts',
+  },
+  plugins,
+  external,
+  output: [{
+    format: 'es',
+    dir: 'lib',
+  }, {
+    format: 'cjs',
+    dir: 'lib',
+    entryFileNames: '[name].cjs',
+  }],
+});

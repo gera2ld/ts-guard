@@ -43,13 +43,6 @@
       "import": "./lib/shim.js"
     }
   },
-  "typesVersions": {
-    "*": {
-      "shim": [
-        "./lib/shim.d.ts"
-      ]
-    }
-  },
   "dependencies": {
     "@babel/runtime": "^7.23.6",
     "cac": "^6.7.14",
