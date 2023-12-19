@@ -89,6 +89,7 @@ export function compile(
       ...projectOptions?.compilerOptions,
       sourceMap: false,
       target: ScriptTarget.ESNext,
+      noEmit: false, // In case enabled in the project
       rootDir: '.',
       outDir,
     },
