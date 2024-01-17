@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve, relative, dirname } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import {
   CallExpression,
   Project,
   ProjectOptions,
   ScriptTarget,
-  ts,
   Type,
+  ts,
 } from 'ts-morph';
 
 const TS_GUARD_TEMPLATE = process.env.TS_GUARD_TEMPLATE as string;
@@ -44,6 +44,25 @@ interface ITypeMeta {
 
 interface ITypeMap {
   [key: string]: ITypeMeta;
+}
+
+interface IContext {
+  /**
+   * Type structure based map.
+   *
+   * - `key` - hash of the structure
+   * - `value` - metadata
+   */
+  typeMap: ITypeMap;
+  /**
+   * Type reference based map.
+   *
+   * - `key` - reference of the type
+   * - `value.key` - key in `typeMap`
+   * - `value.id` - autoincremental ID
+   */
+  typeRefs: Map<Type<ts.Type>, { key: string; id: number }>;
+  files: [string, IGuardInfo[]][];
 }
 
 type IGuardRule = [ref: string, name?: string, optional?: 0 | 1];
@@ -132,7 +151,7 @@ export async function writeFiles(
 function getGuardInfo(
   project: Project,
   node: CallExpression<ts.CallExpression>,
-  typeMap: ITypeMap,
+  context: IContext,
 ) {
   const propArg = node.getArguments()[1];
   const prop = propArg?.getType().getLiteralValueOrThrow() as string;
@@ -143,14 +162,18 @@ function getGuardInfo(
     ? responseType.getPropertyOrThrow(prop).getTypeAtLocation(node)
     : responseType;
   const text = type.getText().split('.').pop();
-  const key = addTypeInfo(typeMap, type, text);
+  const key = addTypeInfo(context, type, text);
   return [node, `/* ${text} */ ${JSON.stringify(key)}`] as IGuardInfo;
 }
 
 function scanFiles(project: Project) {
   const sourceFiles = project.getSourceFiles();
   const filesWithGuard: [string, IGuardInfo[]][] = [];
-  const typeMap: ITypeMap = {};
+  const context: IContext = {
+    typeMap: {},
+    typeRefs: new Map(),
+    files: [],
+  };
   for (const sourceFile of sourceFiles) {
     // console.log("Visit file:", sourceFile.getFilePath());
     const guards: IGuardInfo[] = [];
@@ -162,7 +185,7 @@ function scanFiles(project: Project) {
       const identifierName = identifier?.getText();
       let guard: IGuardInfo | undefined;
       if (identifierName === 'tsGuard') {
-        guard = getGuardInfo(project, node, typeMap);
+        guard = getGuardInfo(project, node, context);
       }
       if (guard) {
         guards.push(guard);
@@ -172,12 +195,13 @@ function scanFiles(project: Project) {
       filesWithGuard.push([sourceFile.getFilePath(), guards]);
     }
   }
-  return { typeMap, files: filesWithGuard };
+  context.files = filesWithGuard;
+  return context;
 }
 
 function updateGuards(
   project: Project,
-  { typeMap, files }: { typeMap: ITypeMap; files: [string, IGuardInfo[]][] },
+  { typeMap, files }: IContext,
   guardFilePath: string,
 ) {
   const guardMap = getRulesFromTypes(typeMap);
@@ -258,13 +282,33 @@ function getOnlyObjectType(type: Type<ts.UnionType>) {
 }
 
 function addTypeInfo(
-  typeMap: ITypeMap,
+  context: IContext,
   type: Type<ts.Type>,
   text?: string,
 ): string {
+  {
+    const value = context.typeRefs.get(type);
+    if (value) {
+      // Type already added
+      if (!value.key) {
+        // Type added but key is not ready, i.e. recursive types
+        value.key = `rec${value.id}`;
+      }
+      return value.key;
+    }
+  }
+  const value = {
+    key: '',
+    id: context.typeRefs.size + 1,
+  };
+  const addTypeRef = () => {
+    context.typeRefs.set(type, value);
+  };
+
   let typeInfo: ITypeInfo = { type: DataType.others };
   if (type.isArray()) {
-    const childKey = addTypeInfo(typeMap, type.getArrayElementTypeOrThrow());
+    addTypeRef();
+    const childKey = addTypeInfo(context, type.getArrayElementTypeOrThrow());
     typeInfo = {
       type: DataType.array,
       param: childKey
@@ -274,6 +318,7 @@ function addTypeInfo(
         : undefined,
     };
   } else if (type.isTuple()) {
+    addTypeRef();
     typeInfo = {
       type: DataType.tuple,
       param: Object.fromEntries(
@@ -281,7 +326,7 @@ function addTypeInfo(
           .getTupleElements()
           .map(
             (type, i) =>
-              [i, { ref: addTypeInfo(typeMap, type) }] as [
+              [i, { ref: addTypeInfo(context, type) }] as [
                 number,
                 { ref: string },
               ],
@@ -290,6 +335,7 @@ function addTypeInfo(
       ),
     };
   } else if (type.isClassOrInterface() || type.isObject()) {
+    addTypeRef();
     const properties = type.getProperties();
     const param: ITypeInfo['param'] = {};
     for (const property of properties) {
@@ -301,7 +347,7 @@ function addTypeInfo(
         propertyType = getOnlyObjectType(propertyType);
         optional = true;
       }
-      const childKey = propertyType && addTypeInfo(typeMap, propertyType);
+      const childKey = propertyType && addTypeInfo(context, propertyType);
       if (childKey) {
         param[property.getName()] = {
           ref: childKey,
@@ -314,14 +360,14 @@ function addTypeInfo(
 
   // Filter uninteresting types
   if (typeInfo.type !== DataType.others) {
-    const key = getTypeHash(typeInfo);
-    typeMap[key] ||= {
+    value.key = context.typeRefs.get(type)?.key || getTypeHash(typeInfo);
+    context.typeMap[value.key] ||= {
       info: typeInfo,
     };
-    if (text && !typeMap[key].text) {
-      typeMap[key].text = text;
+    if (text && !context.typeMap[value.key].text) {
+      context.typeMap[value.key].text = text;
     }
-    return key;
+    return value.key;
   }
   return '';
 }
